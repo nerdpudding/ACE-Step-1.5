@@ -33,6 +33,7 @@ Alle configuratie zit in `.env` en is aanpasbaar per gebruiker. Werkt met elke N
 - [Troubleshooting](#troubleshooting)
 - [Docker bestanden](#docker-bestanden)
 - [Windows / Docker Desktop](#windows--docker-desktop)
+- [TODO](#todo)
 - [Achtergrond](#achtergrond)
 
 ---
@@ -83,12 +84,13 @@ Bij de **eerste start** wordt automatisch het hoofdmodel gedownload (~15GB) van 
 
 ### 4. Gebruik
 
-Na opstarten zijn er twee interfaces:
+Na opstarten:
 
-| Interface | URL | Wanneer |
-|-----------|-----|---------|
-| **Web UI** | http://localhost:8500 | Interactief muziek maken, parameters tweaken, LoRA trainen. Visuele interface met audiospeler en alle opties. |
-| **REST API** | http://localhost:8501 | Programmatisch muziek genereren vanuit eigen code of scripts. Zie [API docs](docs/en/API.md) voor endpoints en parameters. |
+| Interface | URL | Status | Wanneer |
+|-----------|-----|--------|---------|
+| **Web UI** | http://localhost:8500 | Werkt | Interactief muziek maken, parameters tweaken, LoRA trainen. |
+| **REST API** | http://localhost:8500 | Werkt | API endpoints op dezelfde poort als de Web UI (via `--enable-api`). |
+| **Standalone API** | http://localhost:8501 | **TODO** | Aparte API server (`acestep-api`) met extra features. Zie [TODO](#todo). |
 
 Stop met `Ctrl+C` of `docker compose down`.
 
@@ -275,7 +277,7 @@ De volledige LoRA training documentatie met alle parameters, tips en best practi
 
 ## REST API & AI Integratie
 
-De REST API (http://localhost:8501) maakt het mogelijk om muziek programmatisch te genereren. De basisflow is:
+De REST API maakt het mogelijk om muziek programmatisch te genereren. Momenteel draait de API op **poort 8500** (samen met de Web UI via `--enable-api`). Zie [TODO](#todo) voor de standalone API op poort 8501. De basisflow is:
 
 1. Dien een taak in via `POST /release_task`
 2. Poll het resultaat via `POST /query_result`
@@ -285,7 +287,7 @@ De REST API (http://localhost:8501) maakt het mogelijk om muziek programmatisch 
 
 ```bash
 # Genereer een nummer (submit taak)
-curl -s -X POST http://localhost:8501/release_task \
+curl -s -X POST http://localhost:8500/release_task \
   -H 'Content-Type: application/json' \
   -d '{
     "prompt": "Upbeat electronic pop, energetic synths, female vocals",
@@ -296,13 +298,13 @@ curl -s -X POST http://localhost:8501/release_task \
 # Geeft een task_id terug
 
 # Check status (vervang <task_id>)
-curl -s -X POST http://localhost:8501/query_result \
+curl -s -X POST http://localhost:8500/query_result \
   -H 'Content-Type: application/json' \
   -d '{"task_id_list": ["<task_id>"]}'
 # status: 0 = bezig, 1 = klaar, 2 = mislukt
 
 # Download audio via de URL in het resultaat
-curl -o output.mp3 "http://localhost:8501/v1/audio?path=<pad-uit-resultaat>"
+curl -o output.mp3 "http://localhost:8500/v1/audio?path=<pad-uit-resultaat>"
 ```
 
 ### Volledige API documentatie
@@ -440,6 +442,36 @@ Voorbeeldvraag: *"Ik heb Windows 11 met een RTX 3060, Docker Desktop net geinsta
 
 Het originele project heeft een kant-en-klare **Windows portable package** die geen Docker vereist. Als je de Docker setup te complex vindt, is dit de makkelijkere route:
 https://github.com/ace-step/ACE-Step-1.5
+
+---
+
+## TODO
+
+### Standalone REST API op poort 8501
+
+**Status**: Nog niet werkend. De API is nu alleen beschikbaar op poort 8500 (meegelift op Gradio).
+
+**Wat**: ACE-Step heeft twee API-modes:
+
+1. **`acestep --enable-api`** (huidige setup) — Mount API endpoints op de Gradio server (poort 8500). Werkt, maar deelt de poort met de Web UI.
+2. **`acestep-api`** (standalone) — Volledig zelfstandige FastAPI/Uvicorn server op poort 8001 (extern 8501). Heeft extra features: task queue met stats (`/v1/stats`), `/format_input` endpoint, auto-download van ontbrekende modellen, multi-model support.
+
+**Probleem**: Beide modes laden hun eigen modellen in GPU geheugen. Ze kunnen niet tegelijk draaien op 1 GPU. De `docker-entrypoint.sh` start nu alleen de Gradio variant.
+
+**Gewenste oplossing**: Keuze via env var in `.env`, bijv. `ACESTEP_MODE=gradio` (default) of `ACESTEP_MODE=api`. De entrypoint kiest dan welk commando gestart wordt. Geen twee containers nodig — 1 container, 1 keuze.
+
+**Wat moet gebeuren**:
+- [ ] `ACESTEP_MODE` env var toevoegen aan `.env.example` en `.env`
+- [ ] `docker-entrypoint.sh` aanpassen: `if MODE=api` → `exec acestep-api`, anders → `exec acestep --enable-api` (huidige gedrag)
+- [ ] `docker-compose.yml` poort mapping kloppen al (8500→7860, 8501→8001)
+- [ ] REST API sectie in deze README bijwerken
+- [ ] API voorbeelden (curl) aanpassen naar correcte poort per mode
+- [ ] Claude Skills `config.json` afstemmen op gekozen poort
+
+**Referenties**:
+- Standalone API code: `acestep/api_server.py` (FastAPI + Uvicorn, poort 8001)
+- Gradio API routes: `acestep/gradio_ui/api_routes.py` (zelfde endpoints, gemount op Gradio)
+- API documentatie: `_original_repo_old/OLD_CLAUD SKILLS/skills/acestep-docs/api/API.md`
 
 ---
 
