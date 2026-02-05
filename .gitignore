@@ -230,6 +230,5 @@ issues/
 PortableGit/
 proxy_config.txt
 gradio_outputs/
-.env.docker
 training_data/
 cache/

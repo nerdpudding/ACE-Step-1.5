@@ -4,13 +4,21 @@ services:
     container_name: acestep
     runtime: nvidia
     environment:
+      # GPU passthrough
       - NVIDIA_VISIBLE_DEVICES=${ACESTEP_GPU_DEVICE:-0}
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Internal container networking (niet aanpassen)
+      - ACESTEP_API_HOST=0.0.0.0
+      - ACESTEP_API_PORT=8001
+      # Cache directories (mapped via volumes hieronder)
+      - HF_HOME=/app/cache/huggingface
+      - TRITON_CACHE_DIR=/app/cache/triton
+      - TORCHINDUCTOR_CACHE_DIR=/app/cache/torchinductor
     env_file:
-      - .env.docker
+      - .env
     ports:
-      - "8500:7860"   # Gradio UI
-      - "8501:8001"   # REST API
+      - "${GRADIO_PORT:-8500}:7860"   # Gradio UI
+      - "${API_PORT:-8501}:8001"      # REST API
     volumes:
       - ./checkpoints:/app/checkpoints
       - ./gradio_outputs:/app/gradio_outputs

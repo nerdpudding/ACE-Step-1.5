@@ -15,7 +15,7 @@ Wil je ACE-Step liever **zonder Docker** gebruiken? Clone dan direct het origine
 
 ### Over deze repo
 
-Alle configuratie zit in `.env.docker` en is aanpasbaar per gebruiker. Werkt met elke NVIDIA GPU (vanaf ~4GB VRAM). Voor de volledige projectdocumentatie, architectuur en Python API: zie de [originele README](_original_repo_old/README.md) en de [docs/](docs/) map.
+Alle configuratie zit in `.env` en is aanpasbaar per gebruiker. Werkt met elke NVIDIA GPU (vanaf ~4GB VRAM). Voor de volledige projectdocumentatie, architectuur en Python API: zie de [originele README](_original_repo_old/README.md) en de [docs/](docs/) map.
 
 ---
 
@@ -30,6 +30,7 @@ Alle configuratie zit in `.env.docker` en is aanpasbaar per gebruiker. Werkt met
 - [REST API & AI Integratie](#rest-api--ai-integratie)
 - [Configuratie referentie](#configuratie-referentie)
 - [Handige commando's](#handige-commandos)
+- [Troubleshooting](#troubleshooting)
 - [Docker bestanden](#docker-bestanden)
 - [Windows / Docker Desktop](#windows--docker-desktop)
 - [Achtergrond](#achtergrond)
@@ -63,13 +64,13 @@ cd ACE-Step-1.5
 
 ### 2. Maak je configuratie aan
 
-Kopieer het template en pas het aan voor je GPU:
+Het bestand `.env.example` is een template met voorbeeldwaarden. Je kopieert het naar `.env` — dat wordt jouw persoonlijke configuratie. `.env` staat in `.gitignore`, dus het wordt nooit per ongeluk naar GitHub gepusht (handig voor API keys of andere privé-instellingen).
 
 ```bash
-cp .env.example .env.docker
+cp .env.example .env
 ```
 
-Open `.env.docker` en controleer minimaal de `ACESTEP_LM_MODEL_PATH` instelling. Het bestand bevat een tabel die uitlegt welk model bij welke GPU past. Bij twijfel: laat `ACESTEP_INIT_LLM=auto` staan - het systeem kiest dan automatisch op basis van je VRAM.
+Open `.env` en controleer minimaal de `ACESTEP_LM_MODEL_PATH` instelling. Het bestand bevat een tabel die uitlegt welk model bij welke GPU past. Bij twijfel: laat `ACESTEP_INIT_LLM=auto` staan - het systeem kiest dan automatisch op basis van je VRAM.
 
 ### 3. Bouw en start
 
@@ -115,8 +116,8 @@ ACE-Step-1.5/
 │
 ├── cache/                ← Interne caches (HuggingFace, Triton, TorchInductor)
 │
-├── .env.docker           ← Jouw configuratie (niet in git)
-├── .env.example          ← Template voor .env.docker
+├── .env           ← Jouw configuratie (niet in git)
+├── .env.example          ← Template voor .env
 ├── Dockerfile            ← Container image definitie
 ├── docker-compose.yml    ← Service definitie
 └── docker-entrypoint.sh  ← Startup script
@@ -153,7 +154,7 @@ Zonder LM draait ACE-Step in "pure DiT mode" - het genereert nog steeds muziek, 
 
 ### Download
 
-Modellen worden **automatisch gedownload** bij de eerste start van de container. De bron is standaard HuggingFace (instelbaar via `ACESTEP_DOWNLOAD_SOURCE` in `.env.docker`). Als HuggingFace niet bereikbaar is, wordt automatisch ModelScope als fallback gebruikt.
+Modellen worden **automatisch gedownload** bij de eerste start van de container. De bron is standaard HuggingFace (instelbaar via `ACESTEP_DOWNLOAD_SOURCE` in `.env`). Als HuggingFace niet bereikbaar is, wordt automatisch ModelScope als fallback gebruikt.
 
 De modellen worden opgeslagen in `./checkpoints/` op je host (volume mount). Bij volgende starts worden ze direct geladen zonder opnieuw te downloaden.
 
@@ -173,7 +174,7 @@ docker compose run --rm acestep acestep-download --list
 
 ## GPU Configuratie
 
-Pas in `.env.docker` het LM model aan voor je GPU:
+Pas in `.env` het LM model aan voor je GPU:
 
 | Je GPU (voorbeeld) | VRAM | `ACESTEP_LM_MODEL_PATH` | `ACESTEP_INIT_LLM` |
 |---------------------|------|------------------------|---------------------|
@@ -189,7 +190,7 @@ Na wijzigen: `docker compose down && docker compose up`.
 
 ### GPU selectie
 
-Standaard gebruikt de container je eerste GPU (`ACESTEP_GPU_DEVICE=0`). Als je meerdere GPU's hebt en een andere wilt gebruiken (bijv. omdat je primaire GPU je monitors aanstuurt), pas dan `ACESTEP_GPU_DEVICE` aan in `.env.docker`. Check met `nvidia-smi --query-gpu=index,name --format=csv` welk device-ID je GPU heeft. De container krijgt alleen die ene GPU te zien.
+Standaard gebruikt de container je eerste GPU (`ACESTEP_GPU_DEVICE=0`). Als je meerdere GPU's hebt en een andere wilt gebruiken (bijv. omdat je primaire GPU je monitors aanstuurt), pas dan `ACESTEP_GPU_DEVICE` aan in `.env`. Check met `nvidia-smi --query-gpu=index,name --format=csv` welk device-ID je GPU heeft. De container krijgt alleen die ene GPU te zien.
 
 ---
 
@@ -272,7 +273,7 @@ Deze skills staan in `_original_repo_old/OLD_CLAUD SKILLS/` (afkomstig van de or
 
 ## Configuratie referentie
 
-Alle instellingen staan in `.env.docker`. Zie `.env.example` voor het volledige template met uitleg.
+Alle instellingen staan in `.env`. Zie `.env.example` voor het volledige template met uitleg.
 
 | Instelling | Default | Uitleg |
 |------------|---------|--------|
@@ -282,9 +283,12 @@ Alle instellingen staan in `.env.docker`. Zie `.env.example` voor het volledige 
 | `ACESTEP_LM_BACKEND` | `vllm` | `vllm` (snel) of `pt` (compatibeler) |
 | `ACESTEP_INIT_LLM` | `auto` | LLM laden (`true`/`false`/`auto`) |
 | `ACESTEP_DOWNLOAD_SOURCE` | `auto` | `auto`, `huggingface` of `modelscope` |
-| `ACESTEP_API_HOST` | `0.0.0.0` | Server bind address |
-| `ACESTEP_API_PORT` | `8001` | REST API poort (intern) |
+| `GRADIO_PORT` | `8500` | Web UI poort op je host |
+| `API_PORT` | `8501` | REST API poort op je host |
 | `ACESTEP_GPU_DEVICE` | `0` | Welke GPU (zie [GPU selectie](#gpu-selectie)) |
+| `ACESTEP_API_KEY` | *(geen)* | Optioneel. Zet een API key als je de REST API extern wilt exposen of wilt beveiligen tegen ongeautoriseerde toegang. |
+
+Interne container-instellingen (server bind address, interne poorten, cache directories) staan vast in `docker-compose.yml` en hoef je niet aan te passen.
 
 ---
 
@@ -318,31 +322,75 @@ docker compose run --rm -p 8501:8001 acestep acestep-api
 
 ---
 
+## Troubleshooting
+
+| Probleem | Oplossing |
+|----------|-----------|
+| **Out of memory (OOM) error** | Kies een kleiner LM model in `.env`. Zie de GPU tier tabel. |
+| **Port already in use** | Pas `GRADIO_PORT` en/of `API_PORT` aan in `.env` |
+| **Model download faalt** | Probeer `ACESTEP_DOWNLOAD_SOURCE=modelscope` in `.env` |
+| **Container start niet (Windows)** | Check of `docker-entrypoint.sh` Unix line endings (LF) heeft, niet CRLF |
+| **GPU niet zichtbaar** | Run `docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu22.04 nvidia-smi` om te testen of Docker je GPU ziet |
+
+---
+
 ## Docker bestanden
 
-| Bestand | Functie |
-|---------|---------|
-| `Dockerfile` | Bouwt de container image (CUDA 12.8 + Python 3.11 + dependencies) |
-| `docker-compose.yml` | Service definitie: GPU, poorten, volume mounts |
-| `.env.example` | Template configuratie (kopieer naar `.env.docker`) |
-| `.env.docker` | Jouw configuratie (niet in git, gebruiker-specifiek) |
-| `docker-entrypoint.sh` | Startup: downloadt modellen bij eerste start, start UI + API |
-| `.dockerignore` | Sluit onnodige bestanden uit van de Docker build |
+Docker gebruikt twee soorten configuratie:
+
+- **`docker-compose.yml`** beschrijft de infrastructuur: welke container, welke poorten, welke mappen worden gekoppeld. Dit is voor iedereen hetzelfde en staat in git.
+- **`.env`** bevat jouw persoonlijke instellingen: welk model, welke GPU, eventueel een API key. Dit bestand staat in `.gitignore` en wordt dus nooit gedeeld — veilig voor privé-instellingen.
+
+Bij het starten leest Docker Compose **beide bestanden**: de yml voor de structuur, en de `.env` voor jouw waarden. Zo kan iedereen dezelfde yml gebruiken met eigen instellingen.
+
+| Bestand | In git? | Functie |
+|---------|---------|---------|
+| `Dockerfile` | ja | Bouwt de container image (CUDA 12.8 + Python 3.11 + dependencies) |
+| `docker-compose.yml` | ja | Service definitie: GPU, poorten, volume mounts |
+| `.env.example` | ja | Template met voorbeeldwaarden — kopieer naar `.env` |
+| `.env` | **nee** | Jouw persoonlijke configuratie (nooit in git) |
+| `docker-entrypoint.sh` | ja | Startup: downloadt modellen bij eerste start, start UI + API |
+| `.dockerignore` | ja | Sluit onnodige bestanden uit van de Docker build |
 
 ---
 
 ## Windows / Docker Desktop
 
-Deze setup is gebouwd voor en getest op Linux. Op Windows met Docker Desktop (WSL2) werkt het ook, maar er zijn een paar aandachtspunten:
+Deze setup is gebouwd voor en getest op Linux. Op Windows met Docker Desktop werkt het ook, maar de installatie en configuratie is complexer — vooral het werkend krijgen van GPU passthrough.
 
-- **Installatie**: Volg de officiele [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) installatie met **WSL2 backend**. Zorg dat GPU support werkt via Settings → Resources → WSL Integration.
-- **`cp` commando**: Gebruik in PowerShell `copy .env.example .env.docker` in plaats van `cp`
-- **Performance**: Volume mounts zijn trager op Windows/WSL2. Overweeg de repo in het WSL2 filesystem te clonen (`\\wsl$\...`) in plaats van op een Windows drive (`/mnt/c/...`)
-- **Line endings**: Zorg dat `.env.docker` en `docker-entrypoint.sh` Unix line endings (LF) behouden, niet Windows (CRLF)
+### Wat je nodig hebt
 
-Verder zijn alle commando's en configuratie hetzelfde.
+- Docker Desktop met **WSL2 backend** (niet Hyper-V)
+- Werkende NVIDIA GPU drivers op Windows
+- WSL2 met GPU support correct geconfigureerd
 
-> Wil je liever **zonder Docker** op Windows werken? Het originele project heeft een kant-en-klare Windows portable package: https://github.com/ace-step/ACE-Step-1.5
+### Officiele documentatie
+
+- [Docker Desktop installatie (Windows)](https://docs.docker.com/desktop/setup/install/windows-install/)
+- [NVIDIA CUDA on WSL](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)
+- [Docker Desktop GPU support](https://docs.docker.com/desktop/features/gpu/)
+
+### Hulp nodig?
+
+De Windows/WSL2/Docker/GPU stack heeft veel bewegende delen. Als je vastloopt, is een AI-assistent (Claude, ChatGPT, etc.) vaak de snelste manier om stap-voor-stap hulp te krijgen:
+
+1. Geef de assistent deze hele README
+2. Beschrijf je systeem (Windows versie, GPU model, wat je al geinstalleerd hebt)
+3. Plak eventuele foutmeldingen
+4. Vraag om stap-voor-stap begeleiding
+
+Voorbeeldvraag: *"Ik heb Windows 11 met een RTX 3060, Docker Desktop net geinstalleerd. Ik wil dit project draaien maar weet niet of mijn GPU setup correct is. Kun je me stap voor stap helpen?"*
+
+### Windows-specifieke aandachtspunten
+
+- **`cp` commando**: Gebruik in PowerShell `copy .env.example .env`
+- **Line endings**: Zorg dat `docker-entrypoint.sh` Unix line endings (LF) behoudt, niet Windows (CRLF). Git kan dit automatisch converteren — als de container faalt met een cryptische error, check dit eerst.
+- **Performance**: Volume mounts zijn trager op Windows. Voor betere performance: clone de repo in het WSL2 filesystem in plaats van op een Windows drive.
+
+### Alternatief: zonder Docker
+
+Het originele project heeft een kant-en-klare **Windows portable package** die geen Docker vereist. Als je de Docker setup te complex vindt, is dit de makkelijkere route:
+https://github.com/ace-step/ACE-Step-1.5
 
 ---
 
