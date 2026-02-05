@@ -79,7 +79,7 @@ docker compose build
 docker compose up
 ```
 
-Bij de **eerste start** worden automatisch alle AI-modellen gedownload (~15-25GB) van HuggingFace. Dit hoeft maar 1 keer - de modellen worden opgeslagen in `./checkpoints/` op je host en blijven daar staan.
+Bij de **eerste start** wordt automatisch het hoofdmodel gedownload (~15GB) van HuggingFace. Dit hoeft maar 1 keer — de modellen worden opgeslagen in `./checkpoints/` op je host en blijven daar staan. Als je een ander LM model hebt geconfigureerd in `.env` (bijv. `acestep-5Hz-lm-4B`), wordt dat ook automatisch gedownload.
 
 ### 4. Gebruik
 
@@ -100,11 +100,9 @@ Alle data staat in de repo folder op je host, direct toegankelijk:
 
 ```
 ACE-Step-1.5/
-├── checkpoints/          ← AI modellen (auto-download, ~15-25GB)
+├── checkpoints/          ← AI modellen (auto-download bij eerste start)
 │   ├── acestep-v15-turbo/    DiT model (muziekgeneratie)
-│   ├── acestep-5Hz-lm-4B/   Language Model - beste kwaliteit
-│   ├── acestep-5Hz-lm-1.7B/ Language Model - standaard
-│   ├── acestep-5Hz-lm-0.6B/ Language Model - compact
+│   ├── acestep-5Hz-lm-*/     Language Model (afh. van ACESTEP_LM_MODEL_PATH in .env)
 │   ├── vae/                  Audio encoder/decoder
 │   └── Qwen3-Embedding-0.6B/ Tekst encoder
 │
@@ -127,11 +125,21 @@ ACE-Step-1.5/
 
 ## Modellen
 
-ACE-Step gebruikt meerdere modellen die samenwerken:
+ACE-Step gebruikt meerdere modellen die samenwerken. Bij de eerste start wordt het **hoofdmodel** automatisch gedownload (~15GB). Extra modellen kun je later bijdownloaden.
 
-### DiT Model (verplicht)
+### DiT Model (muziekgeneratie)
 
-Het **DiT model** (`acestep-v15-turbo`) is de kern die de muziek genereert. Dit model is voor iedereen hetzelfde en gebruikt ~4GB VRAM.
+Het DiT model is de kern die de muziek genereert (~4GB VRAM). Alle varianten gebruiken even veel VRAM — het verschil zit in snelheid, kwaliteit en features. Stel in via `ACESTEP_CONFIG_PATH` in `.env`.
+
+| Model | Steps | Snelheid | Kwaliteit | LoRA training | Wanneer gebruiken |
+|-------|-------|----------|-----------|--------------|-------------------|
+| **`acestep-v15-turbo`** | 8 | Snel | Zeer hoog | Gemiddeld | **Default. Aanbevolen voor de meeste gebruikers.** Beste balans tussen snelheid en kwaliteit. |
+| `acestep-v15-sft` | 50 | Langzaam | Hoog | Makkelijk | Als je makkelijker wilt fine-tunen of meer controle wilt over het resultaat. |
+| `acestep-v15-base` | 50 | Langzaam | Medium | Makkelijk | Meeste diversiteit en extra features (Extract, Lego, Complete). Beste startpunt voor LoRA training. |
+
+Er zijn ook experimentele turbo-varianten met andere noise schedules: `acestep-v15-turbo-shift1`, `acestep-v15-turbo-shift3` en `acestep-v15-turbo-continuous`. Deze zijn voor gevorderd gebruik.
+
+Alleen `acestep-v15-turbo` wordt automatisch gedownload. Andere modellen kun je bijdownloaden (zie [Download](#download)) en selecteren via `ACESTEP_CONFIG_PATH` in `.env` of via de Web UI.
 
 ### Language Model (optioneel, sterk aanbevolen)
 
@@ -140,10 +148,12 @@ Het **Language Model (LM)** verbetert de tekstverwerking: het begrijpt je beschr
 | Model | Parameters | VRAM | Kwaliteit | Aanbevolen voor |
 |-------|-----------|------|-----------|-----------------|
 | `acestep-5Hz-lm-0.6B` | 600M | ~3GB | Basis | 6-12GB GPU's |
-| `acestep-5Hz-lm-1.7B` | 1.7B | ~8GB | Goed | 12-16GB GPU's |
+| **`acestep-5Hz-lm-1.7B`** | 1.7B | ~8GB | Goed | 12-16GB GPU's |
 | `acestep-5Hz-lm-4B` | 4B | ~12GB | Beste | 16GB+ GPU's |
 
-Zonder LM draait ACE-Step in "pure DiT mode" - het genereert nog steeds muziek, maar je mist Thinking mode, Chain-of-Thought, Sample mode en Format mode.
+`acestep-5Hz-lm-1.7B` wordt automatisch gedownload met het hoofdmodel. Als je in `.env` een ander LM model configureert (bijv. `acestep-5Hz-lm-4B`), wordt dat automatisch bijgedownload bij de volgende start.
+
+Zonder LM draait ACE-Step in "pure DiT mode" — het genereert nog steeds muziek, maar je mist Thinking mode, Chain-of-Thought, Sample mode en Format mode.
 
 ### Overige modellen (automatisch)
 
@@ -152,22 +162,27 @@ Zonder LM draait ACE-Step in "pure DiT mode" - het genereert nog steeds muziek, 
 | VAE | ~1GB | Converteert tussen audio en het interne latent space formaat |
 | Qwen3-Embedding-0.6B | ~2GB | Verwerkt je tekstinput naar embeddings |
 
+Deze worden automatisch gedownload als onderdeel van het hoofdmodel.
+
 ### Download
 
-Modellen worden **automatisch gedownload** bij de eerste start van de container. De bron is standaard HuggingFace (instelbaar via `ACESTEP_DOWNLOAD_SOURCE` in `.env`). Als HuggingFace niet bereikbaar is, wordt automatisch ModelScope als fallback gebruikt.
+Bij de **eerste start** downloadt de container automatisch het hoofdmodel (~15GB) van HuggingFace. Dit bevat: `acestep-v15-turbo` + `acestep-5Hz-lm-1.7B` + VAE + text encoder. Als je in `.env` een ander LM model hebt geconfigureerd, wordt dat ook automatisch gedownload.
 
-De modellen worden opgeslagen in `./checkpoints/` op je host (volume mount). Bij volgende starts worden ze direct geladen zonder opnieuw te downloaden.
+De bron is standaard HuggingFace (instelbaar via `ACESTEP_DOWNLOAD_SOURCE` in `.env`). Als HuggingFace niet bereikbaar is, wordt automatisch ModelScope als fallback gebruikt.
 
-Handmatig downloaden kan ook:
+Alle modellen worden opgeslagen in `./checkpoints/` op je host (volume mount). Bij volgende starts worden ze direct geladen zonder opnieuw te downloaden.
+
+Extra modellen handmatig downloaden:
 ```bash
-# Alle modellen
-docker compose run --rm acestep acestep-download --all
+# Bekijk alle beschikbare modellen
+docker compose run --rm acestep acestep-download --list
 
-# Specifiek model
+# Download een specifiek model
+docker compose run --rm acestep acestep-download --model acestep-v15-base
 docker compose run --rm acestep acestep-download --model acestep-5Hz-lm-4B
 
-# Beschikbare modellen bekijken
-docker compose run --rm acestep acestep-download --list
+# Download alles (alle DiT varianten + alle LM modellen, ~50GB+)
+docker compose run --rm acestep acestep-download --all
 ```
 
 ---
@@ -196,9 +211,43 @@ Standaard gebruikt de container je eerste GPU (`ACESTEP_GPU_DEVICE=0`). Als je m
 
 ## LoRA Training
 
-LoRA (Low-Rank Adaptation) laat je het model fine-tunen op je eigen muziek. Met slechts een paar nummers kun je een eigen stijl aanleren. Het resultaat is een klein bestand (~10-50MB) dat bovenop het basismodel werkt.
+### Wat is LoRA?
 
-Referentie: op een RTX 3090 (12GB) duurt het trainen van 8 nummers ongeveer 1 uur.
+LoRA (Low-Rank Adaptation) laat je het model fine-tunen op je eigen muziek zonder het hele model opnieuw te trainen. Je leert het model een specifieke stijl, artiest of geluid aan met een paar nummers. Het resultaat is een klein bestand (~10-50MB) dat je bovenop het basismodel laadt — je kunt het aan- en uitzetten.
+
+**Wanneer gebruiken:**
+- Je wilt muziek genereren in een specifieke stijl (bijv. "klink als mijn band")
+- Je wilt een bepaald instrument of geluid nauwkeuriger reproduceren
+- Je wilt consistent een bepaald genre of sound genereren
+
+### Welk DiT model voor training?
+
+**Train altijd op hetzelfde model dat je ook voor generatie gebruikt.** Een LoRA leert aanpassingen relatief aan de weights van het model waarop je traint. Op een ander model laden kan technisch (de architectuur is identiek), maar de resultaten zijn dan onvoorspelbaar.
+
+| Scenario | DiT model | Waarom |
+|----------|-----------|--------|
+| Snel genereren met LoRA | `acestep-v15-turbo` | Train en genereer op turbo. Snelste resultaat (8 steps). |
+| Makkelijker trainen | `acestep-v15-base` | Leert stijlen sneller aan, meer diversiteit. Maar: langzamer bij generatie (50 steps), en de LoRA werkt alleen goed op base. |
+| Balans kwaliteit/training | `acestep-v15-sft` | Hogere basiskwaliteit dan base, makkelijker te trainen dan turbo. |
+
+De meeste gebruikers willen turbo voor snelle generatie → train dan ook op turbo.
+
+### Model wisselen
+
+Als je een ander DiT model wilt gebruiken (bijv. `base` voor LoRA training), heb je twee opties:
+
+**Optie 1: Via de Web UI (geen herstart nodig)**
+1. Open de Web UI → kies een ander model in de "Checkpoint" dropdown
+2. Klik op "Initialize Service" om het nieuwe model te laden
+
+**Optie 2: Via `.env` (herstart nodig)**
+1. Pas `ACESTEP_CONFIG_PATH` aan in `.env` (bijv. `acestep-v15-base`)
+2. `docker compose down && docker compose up`
+
+Als het model nog niet gedownload is:
+```bash
+docker compose run --rm acestep acestep-download --model acestep-v15-base
+```
 
 ### Workflow
 
@@ -206,10 +255,10 @@ Referentie: op een RTX 3090 (12GB) duurt het trainen van 8 nummers ongeveer 1 uu
 2. **Dataset bouwen**: Open de Web UI → **LoRA Training** tab → **Dataset Builder**
    - Voeg je audiobestanden toe
    - Annoteer ze (automatisch of handmatig) met beschrijving, genre, BPM etc.
-   - Geef een dataset naam en optioneel een "activation tag" (een uniek woord dat je later in je prompt gebruikt om de aangeleerde stijl te activeren)
-3. **Preprocessen**: Klik op "Preprocess" - de dataset wordt omgezet naar tensors (VAE latents + text embeddings). Dit is een eenmalige stap per dataset.
+   - Geef een dataset naam en een "activation tag" — een uniek woord dat je later in je prompt gebruikt om de aangeleerde stijl te activeren (bijv. "mystijl")
+3. **Preprocessen**: Klik op "Preprocess" — de dataset wordt omgezet naar tensors. Dit is een eenmalige stap per dataset.
 4. **Trainen**: Configureer training parameters (epochs, learning rate, LoRA rank) en start de training
-5. **Gebruiken**: Laad de getrainde LoRA via het configuratiepaneel in de Web UI en genereer muziek in je eigen stijl
+5. **Gebruiken**: Ga naar het generatie-scherm, laad je LoRA via het configuratiepaneel, en gebruik je activation tag in de prompt
 
 ### Training output
 
