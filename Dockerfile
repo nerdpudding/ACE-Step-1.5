@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ffmpeg \
     libsndfile1 \
+    gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -38,7 +39,7 @@ COPY acestep/third_parts/nano-vllm/ /app/acestep/third_parts/nano-vllm/
 RUN pip install --no-cache-dir /app/acestep/third_parts/nano-vllm/
 
 # === Layer 3: Main package (editable install for _get_project_root()) ===
-COPY pyproject.toml /app/
+COPY pyproject.toml README.md /app/
 COPY acestep/ /app/acestep/
 COPY examples/ /app/examples/
 COPY scripts/ /app/scripts/
