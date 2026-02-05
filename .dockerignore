@@ -1,0 +1,15 @@
+.git
+OLD_CLAUD SKILLS/
+claude_plans/
+*.bat
+__pycache__
+*.pyc
+.venv
+checkpoints/
+gradio_outputs/
+lora_output/
+training_data/
+cache/
+*.egg-info
+.env
+.env.docker

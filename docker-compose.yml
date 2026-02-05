@@ -1,0 +1,22 @@
+services:
+  acestep:
+    build: .
+    container_name: acestep
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=${ACESTEP_GPU_DEVICE:-0}
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    env_file:
+      - .env.docker
+    ports:
+      - "8500:7860"   # Gradio UI
+      - "8501:8001"   # REST API
+    volumes:
+      - ./checkpoints:/app/checkpoints
+      - ./gradio_outputs:/app/gradio_outputs
+      - ./lora_output:/app/lora_output
+      - ./training_data:/app/training_data
+      - ./cache:/app/cache
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
