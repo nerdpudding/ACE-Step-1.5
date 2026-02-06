@@ -20,6 +20,19 @@ if [ "$LM_MODEL" != "acestep-5Hz-lm-1.7B" ] && [ ! -d "/app/checkpoints/$LM_MODE
     acestep-download --model "$LM_MODEL"
 fi
 
-# Start Gradio UI with REST API enabled
-# Override by passing a command: docker compose run acestep acestep-api
-exec acestep --server-name 0.0.0.0 --port 7860 --enable-api --init_service true "$@"
+# Determine startup mode
+MODE="${ACESTEP_MODE:-gradio}"
+
+case "$MODE" in
+  api)
+    echo "=== Starting standalone REST API on port 8001 ==="
+    echo "External: http://localhost:${API_PORT:-8501}"
+    echo "API docs: see docs/ai-integration/ or docs/en/API.md"
+    exec acestep-api "$@"
+    ;;
+  gradio|*)
+    echo "=== Starting Gradio UI + embedded API on port 7860 ==="
+    echo "External: http://localhost:${GRADIO_PORT:-8500}"
+    exec acestep --server-name 0.0.0.0 --port 7860 --enable-api --init_service true "$@"
+    ;;
+esac

@@ -33,7 +33,7 @@ Alle configuratie zit in `.env` en is aanpasbaar per gebruiker. Werkt met elke N
 - [Troubleshooting](#troubleshooting)
 - [Docker bestanden](#docker-bestanden)
 - [Windows / Docker Desktop](#windows--docker-desktop)
-- [TODO](#todo)
+- [Changelog](#changelog)
 - [Achtergrond](#achtergrond)
 
 ---
@@ -86,13 +86,22 @@ Bij de **eerste start** wordt automatisch het hoofdmodel gedownload (~15GB) van 
 
 Na opstarten:
 
-| Interface | URL | Status | Wanneer |
-|-----------|-----|--------|---------|
-| **Web UI** | http://localhost:8500 | Werkt | Interactief muziek maken, parameters tweaken, LoRA trainen. |
-| **REST API** | http://localhost:8500 | Werkt | API endpoints op dezelfde poort als de Web UI (via `--enable-api`). |
-| **Standalone API** | http://localhost:8501 | **TODO** | Aparte API server (`acestep-api`) met extra features. Zie [TODO](#todo). |
+| Interface | URL | Mode | Wanneer |
+|-----------|-----|------|---------|
+| **Web UI + API** | http://localhost:8500 | `ACESTEP_MODE=gradio` (default) | Interactief muziek maken, parameters tweaken, LoRA trainen. API endpoints meegeleverd. |
+| **Standalone API** | http://localhost:8501 | `ACESTEP_MODE=api` | Alleen REST API, geen UI. Extra features: `/v1/stats`, `/format_input`, task queue. Voor AI-integratie en scripts. |
 
-Stop met `Ctrl+C` of `docker compose down`.
+Wissel van mode door `ACESTEP_MODE` in `.env` aan te passen en te herstarten:
+
+```bash
+docker compose down && docker compose up
+# Of op de achtergrond (logs bekijken via: docker compose logs -f)
+docker compose down && docker compose up -d
+```
+
+**Let op**: `docker compose down` is verplicht bij `.env` wijzigingen. Alleen `Ctrl+C` (stop) is niet genoeg — de container herstart dan met de oude instellingen. `down` verwijdert de container zodat een nieuwe wordt aangemaakt met de bijgewerkte `.env`. Je data (modellen, outputs, cache) blijft behouden — dat zijn mappen op je host, geen onderdeel van de container.
+
+Beide modes laden hun eigen modellen in GPU geheugen — ze kunnen niet tegelijk draaien op dezelfde GPU.
 
 ---
 
@@ -277,7 +286,14 @@ De volledige LoRA training documentatie met alle parameters, tips en best practi
 
 ## REST API & AI Integratie
 
-De REST API maakt het mogelijk om muziek programmatisch te genereren. Momenteel draait de API op **poort 8500** (samen met de Web UI via `--enable-api`). Zie [TODO](#todo) voor de standalone API op poort 8501. De basisflow is:
+De REST API maakt het mogelijk om muziek programmatisch te genereren. Er zijn twee modes:
+
+| Mode | Poort | Beschikbare endpoints |
+|------|-------|-----------------------|
+| **Gradio** (default) | 8500 | `/release_task`, `/query_result`, `/v1/audio`, `/v1/models`, `/health` |
+| **Standalone API** | 8501 | Alles hierboven + `/v1/stats`, `/format_input`, `/create_random_sample` |
+
+De basisflow is in beide modes hetzelfde:
 
 1. Dien een taak in via `POST /release_task`
 2. Poll het resultaat via `POST /query_result`
@@ -286,8 +302,13 @@ De REST API maakt het mogelijk om muziek programmatisch te genereren. Momenteel 
 ### Snel voorbeeld
 
 ```bash
+# Poort hangt af van je mode:
+#   ACESTEP_MODE=gradio → poort 8500
+#   ACESTEP_MODE=api    → poort 8501
+PORT=8501  # pas aan naar jouw mode
+
 # Genereer een nummer (submit taak)
-curl -s -X POST http://localhost:8500/release_task \
+curl -s -X POST http://localhost:$PORT/release_task \
   -H 'Content-Type: application/json' \
   -d '{
     "prompt": "Upbeat electronic pop, energetic synths, female vocals",
@@ -298,27 +319,38 @@ curl -s -X POST http://localhost:8500/release_task \
 # Geeft een task_id terug
 
 # Check status (vervang <task_id>)
-curl -s -X POST http://localhost:8500/query_result \
+curl -s -X POST http://localhost:$PORT/query_result \
   -H 'Content-Type: application/json' \
   -d '{"task_id_list": ["<task_id>"]}'
 # status: 0 = bezig, 1 = klaar, 2 = mislukt
 
 # Download audio via de URL in het resultaat
-curl -o output.mp3 "http://localhost:8500/v1/audio?path=<pad-uit-resultaat>"
+curl -o output.mp3 "http://localhost:$PORT/v1/audio?path=<pad-uit-resultaat>"
 ```
 
 ### Volledige API documentatie
 
-Zie [docs/en/API.md](docs/en/API.md) voor alle endpoints, parameters, authenticatie en voorbeelden.
+Zie [docs/ai-integration/API.md](docs/ai-integration/API.md) voor alle endpoints, parameters, authenticatie en voorbeelden.
 
-### AI-gestuurde muziekgeneratie (Claude Skills)
+### AI-gestuurde muziekgeneratie
 
-De originele repo bevatte Claude Code skills waarmee een AI-assistent de API kan aansturen om muziek te genereren via natuurlijke taal. Denk aan: "Maak een vrolijk popnummer over de zomer, 2 minuten, 120 BPM" - en Claude handelt de API calls, lyrics en parameters af.
+Wil je een AI-assistent of agent de API laten aansturen om muziek te genereren? Bijvoorbeeld: *"Maak een creatief black metal nummer in de stijl van Dimmu Borgir"* — en de AI schrijft lyrics, kiest parameters, en stuurt de API calls aan.
 
-Deze skills staan in `_original_repo_old/OLD_CLAUD SKILLS/` (afkomstig van de originele upstream repo):
-- [`skills/acestep/`](_original_repo_old/OLD_CLAUD%20SKILLS/skills/acestep/) - Muziekgeneratie skill (API calls, lyrics schrijven, parameter keuze)
-- [`skills/acestep-docs/`](_original_repo_old/OLD_CLAUD%20SKILLS/skills/acestep-docs/) - Setup en troubleshooting hulp
-- [`skills/acestep-docs/guides/`](_original_repo_old/OLD_CLAUD%20SKILLS/skills/acestep-docs/guides/) - Gedetailleerde handleidingen (API, GPU, Gradio, inference)
+Hiervoor zijn instructiedocumenten beschikbaar in [`docs/ai-integration/`](docs/ai-integration/):
+
+| Document | Wat het bevat |
+|----------|---------------|
+| [`SKILL.md`](docs/ai-integration/SKILL.md) | AI instructieset: API workflow, endpoints, parameters, generatie-modes. Bruikbaar als skill, system prompt, of agent instructie. |
+| [`music-creation-guide.md`](docs/ai-integration/music-creation-guide.md) | Muziekcreatie kennis: caption schrijven, lyrics met structure tags, BPM/key/duur berekenen, tips. |
+| [`API.md`](docs/ai-integration/API.md) | Volledige API referentie met alle endpoints en voorbeelden. |
+
+**Hoe te gebruiken met je AI tool**:
+- **Claude Code / tools met skill support**: Verwijs naar `docs/ai-integration/SKILL.md` als skill
+- **System prompt / custom agent**: Kopieer de inhoud van `SKILL.md` en `music-creation-guide.md` naar de system instructies van je agent
+- **Orchestrator frameworks** (LangChain, CrewAI, etc.): Neem de documenten op als tool descriptions of agent instructies
+- **Direct API gebruik**: Zie `docs/ai-integration/API.md`
+
+**Let op**: Voor AI-integratie op poort 8501 moet `ACESTEP_MODE=api` staan in `.env`.
 
 ---
 
@@ -328,6 +360,7 @@ Alle instellingen staan in `.env`. Zie `.env.example` voor het volledige templat
 
 | Instelling | Default | Uitleg |
 |------------|---------|--------|
+| `ACESTEP_MODE` | `gradio` | `gradio` = Web UI + API op poort 8500, `api` = standalone API op poort 8501 |
 | `ACESTEP_DEVICE` | `auto` | GPU selectie (`auto`, `cuda`, `cpu`) |
 | `ACESTEP_CONFIG_PATH` | `acestep-v15-turbo` | DiT model |
 | `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-1.7B` | LM model (kies voor je VRAM) |
@@ -367,8 +400,9 @@ docker compose run --rm acestep nvidia-smi
 # Modellen downloaden
 docker compose run --rm acestep acestep-download --all
 
-# Alleen REST API starten (zonder Web UI)
-docker compose run --rm -p 8501:8001 acestep acestep-api
+# Wisselen naar standalone API mode
+# Zet ACESTEP_MODE=api in .env, daarna:
+docker compose down && docker compose up
 ```
 
 ---
@@ -400,7 +434,7 @@ Bij het starten leest Docker Compose **beide bestanden**: de yml voor de structu
 | `docker-compose.yml` | ja | Service definitie: GPU, poorten, volume mounts |
 | `.env.example` | ja | Template met voorbeeldwaarden — kopieer naar `.env` |
 | `.env` | **nee** | Jouw persoonlijke configuratie (nooit in git) |
-| `docker-entrypoint.sh` | ja | Startup: downloadt modellen bij eerste start, start UI + API |
+| `docker-entrypoint.sh` | ja | Startup script: downloadt modellen bij eerste start, kiest op basis van `ACESTEP_MODE` welke server gestart wordt (Gradio of standalone API) |
 | `.dockerignore` | ja | Sluit onnodige bestanden uit van de Docker build |
 
 ---
@@ -445,33 +479,18 @@ https://github.com/ace-step/ACE-Step-1.5
 
 ---
 
-## TODO
+## Changelog
 
 ### Standalone REST API op poort 8501
 
-**Status**: Nog niet werkend. De API is nu alleen beschikbaar op poort 8500 (meegelift op Gradio).
+**Status**: Geimplementeerd. Kies je mode via `ACESTEP_MODE` in `.env`.
 
-**Wat**: ACE-Step heeft twee API-modes:
-
-1. **`acestep --enable-api`** (huidige setup) — Mount API endpoints op de Gradio server (poort 8500). Werkt, maar deelt de poort met de Web UI.
-2. **`acestep-api`** (standalone) — Volledig zelfstandige FastAPI/Uvicorn server op poort 8001 (extern 8501). Heeft extra features: task queue met stats (`/v1/stats`), `/format_input` endpoint, auto-download van ontbrekende modellen, multi-model support.
-
-**Probleem**: Beide modes laden hun eigen modellen in GPU geheugen. Ze kunnen niet tegelijk draaien op 1 GPU. De `docker-entrypoint.sh` start nu alleen de Gradio variant.
-
-**Gewenste oplossing**: Keuze via env var in `.env`, bijv. `ACESTEP_MODE=gradio` (default) of `ACESTEP_MODE=api`. De entrypoint kiest dan welk commando gestart wordt. Geen twee containers nodig — 1 container, 1 keuze.
-
-**Wat moet gebeuren**:
-- [ ] `ACESTEP_MODE` env var toevoegen aan `.env.example` en `.env`
-- [ ] `docker-entrypoint.sh` aanpassen: `if MODE=api` → `exec acestep-api`, anders → `exec acestep --enable-api` (huidige gedrag)
-- [ ] `docker-compose.yml` poort mapping kloppen al (8500→7860, 8501→8001)
-- [ ] REST API sectie in deze README bijwerken
-- [ ] API voorbeelden (curl) aanpassen naar correcte poort per mode
-- [ ] Claude Skills `config.json` afstemmen op gekozen poort
-
-**Referenties**:
-- Standalone API code: `acestep/api_server.py` (FastAPI + Uvicorn, poort 8001)
-- Gradio API routes: `acestep/gradio_ui/api_routes.py` (zelfde endpoints, gemount op Gradio)
-- API documentatie: `_original_repo_old/OLD_CLAUD SKILLS/skills/acestep-docs/api/API.md`
+- [x] `ACESTEP_MODE` env var toegevoegd aan `.env.example` en `.env`
+- [x] `docker-entrypoint.sh` aangepast met mode switch (gradio/api)
+- [x] REST API sectie in README bijgewerkt met beide modes
+- [x] AI-integratie documentatie aangemaakt in `docs/ai-integration/`
+- [x] API voorbeelden aangepast naar correcte poort per mode
+- [x] Configuratie referentie tabel uitgebreid met `ACESTEP_MODE`
 
 ---
 
